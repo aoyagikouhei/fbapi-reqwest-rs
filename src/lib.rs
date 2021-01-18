@@ -3,6 +3,7 @@ pub mod error;
 #[macro_use]
 extern crate serde_json;
 
+use async_trait::async_trait;
 use crate::error::FbapiError;
 use crypto::mac::Mac;
 use once_cell::sync::Lazy;
@@ -22,26 +23,30 @@ static ERROR_VALUE: Lazy<serde_json::Value> = Lazy::new(|| {
     })
 });
 
-pub struct Fbapi<U, F>
-where
-    U: Future<Output = ()>,
-    F: Fn(LogParams) -> U,
+#[async_trait]
+pub trait FbapiLog {
+    async fn log(&self, params: LogParams) {
+        match params.result {
+            Some(ref result) => println!("params {},{:?},{},{:?}",  params.path, params.params, params.count, result),
+            None => println!("params {},{:?},{}",  params.path, params.params, params.count),
+        }
+    }
+}
+
+pub struct Fbapi
 {
     client: reqwest::Client,
     version: String,
-    log: F,
+    log_executor: Box<dyn FbapiLog + 'static + Sync>,
     rate_limit_emulation: bool,
 }
 
-impl<U, F> Fbapi<U, F>
-where
-    U: Future<Output = ()>,
-    F: Fn(LogParams) -> U,
+impl Fbapi
 {
     pub fn new(
         version: &str,
         timeout_seconds: u64,
-        log: F,
+        log_executor: Box<dyn FbapiLog + 'static + Sync>,
         rate_limit_emulation: bool,
     ) -> Result<Self, FbapiError> {
         Ok(Self {
@@ -49,7 +54,7 @@ where
                 .timeout(Duration::from_secs(timeout_seconds))
                 .build()?,
             version: version.to_owned(),
-            log: log,
+            log_executor: log_executor,
             rate_limit_emulation: rate_limit_emulation,
         })
     }
@@ -83,14 +88,14 @@ where
             result: None,
         };
         if self.rate_limit_emulation {
-            (self.log)(params).await;
+            self.log_executor.log(params).await;
             return Err(FbapiError::Facebook((*ERROR_VALUE).clone()));
         }
         let json = self
             .execute_retry(
                 retry_count,
                 || async { self.client.get(&path).send().await.map_err(|e| e.into()) },
-                &self.log,
+                &self.log_executor,
                 params,
             )
             .await?;
@@ -102,7 +107,7 @@ where
         &self,
         retry_count: usize,
         executor: Executor,
-        log: &F,
+        log_executor: &Box<dyn FbapiLog + 'static + Sync>,
         src_params: LogParams,
     ) -> Result<serde_json::Value, FbapiError>
     where
@@ -114,7 +119,7 @@ where
         loop {
             let mut params = src_params.clone();
             params.count = count;
-            log(params).await;
+            log_executor.log(params).await;
             match executor().await {
                 Ok(response) => match response.json::<serde_json::Value>().await {
                     Ok(json) => {
@@ -124,7 +129,7 @@ where
                             let mut params = src_params.clone();
                             params.count = count;
                             params.result = Some(json.clone());
-                            log(params).await;
+                            log_executor.log(params).await;
                             return Ok(json);
                         }
                     }
@@ -163,17 +168,15 @@ pub struct LogParams {
 mod tests {
     use super::*;
 
+    struct Dummy;
+    impl FbapiLog for Dummy {}
+
     #[tokio::test]
     async fn it_works() {
         let api = Fbapi::new(
             "v8.0",
             10,
-            |params| async move {
-                println!(
-                    "params {},{:?},{},{:?}",
-                    params.path, params.params, params.count, params.result
-                )
-            },
+            Box::new(Dummy{}),
             true,
         )
         .unwrap();
