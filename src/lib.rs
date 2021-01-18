@@ -22,26 +22,18 @@ static ERROR_VALUE: Lazy<serde_json::Value> = Lazy::new(|| {
     })
 });
 
-pub struct Fbapi<U, F>
-where
-    U: Future<Output = ()>,
-    F: Fn(LogParams) -> U,
+pub struct Fbapi
 {
     client: reqwest::Client,
     version: String,
-    log: F,
     rate_limit_emulation: bool,
 }
 
-impl<U, F> Fbapi<U, F>
-where
-    U: Future<Output = ()>,
-    F: Fn(LogParams) -> U,
+impl Fbapi
 {
     pub fn new(
         version: &str,
         timeout_seconds: u64,
-        log: F,
         rate_limit_emulation: bool,
     ) -> Result<Self, FbapiError> {
         Ok(Self {
@@ -49,7 +41,6 @@ where
                 .timeout(Duration::from_secs(timeout_seconds))
                 .build()?,
             version: version.to_owned(),
-            log: log,
             rate_limit_emulation: rate_limit_emulation,
         })
     }
@@ -62,6 +53,7 @@ where
         fields: &str,
         params: &[(&str, &str)],
         retry_count: usize,
+        log:  impl Fn(LogParams),
     ) -> Result<serde_json::Value, FbapiError> {
         let mut query = [("access_token", access_token), ("fields", fields)]
             .iter()
@@ -83,14 +75,14 @@ where
             result: None,
         };
         if self.rate_limit_emulation {
-            (self.log)(params).await;
+            (log)(params);
             return Err(FbapiError::Facebook((*ERROR_VALUE).clone()));
         }
         let json = self
             .execute_retry(
                 retry_count,
                 || async { self.client.get(&path).send().await.map_err(|e| e.into()) },
-                &self.log,
+                &log,
                 params,
             )
             .await?;
@@ -102,7 +94,7 @@ where
         &self,
         retry_count: usize,
         executor: Executor,
-        log: &F,
+        log: &impl Fn(LogParams),
         src_params: LogParams,
     ) -> Result<serde_json::Value, FbapiError>
     where
@@ -114,7 +106,7 @@ where
         loop {
             let mut params = src_params.clone();
             params.count = count;
-            log(params).await;
+            log(params);
             match executor().await {
                 Ok(response) => match response.json::<serde_json::Value>().await {
                     Ok(json) => {
@@ -124,7 +116,7 @@ where
                             let mut params = src_params.clone();
                             params.count = count;
                             params.result = Some(json.clone());
-                            log(params).await;
+                            log(params);
                             return Ok(json);
                         }
                     }
@@ -168,16 +160,15 @@ mod tests {
         let api = Fbapi::new(
             "v8.0",
             10,
-            |params| async move {
-                println!(
-                    "params {},{:?},{},{:?}",
-                    params.path, params.params, params.count, params.result
-                )
-            },
             true,
         )
         .unwrap();
-        let res = api.get_object("xxxx", None, "aaa", "", &vec![], 2).await;
+        let res = api.get_object("xxxx", None, "aaa", "", &vec![], 2, |params| {
+            println!(
+                "params {},{:?},{},{:?}",
+                params.path, params.params, params.count, params.result
+            )
+        },).await;
         println!("{:?}", res);
     }
 }
