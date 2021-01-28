@@ -1,4 +1,6 @@
+pub mod batch_request;
 pub mod error;
+
 
 #[macro_use]
 extern crate serde_json;
@@ -88,6 +90,50 @@ impl Fbapi
             .await?;
 
         Ok(json)
+    }
+
+    pub async fn post_batch(
+        &self,
+        access_token: &str,
+        app_secret: Option<&str>,
+        batch: batch_request::BatchRequest,
+        retry_count: usize,
+        log:  impl Fn(LogParams),
+    ) -> Result<Vec<Result<serde_json::Value, FbapiError>>, FbapiError> {
+        let batch_string = batch.to_string();
+        let mut query = vec![
+                ("access_token", access_token),
+                ("include_headers", "false"),
+                ("batch", batch_string.as_str()),
+            ];
+
+        let appsecret_proof = app_secret.map(|secret| sign(access_token, secret)).unwrap_or("".to_string());
+        if app_secret.is_some() {
+            query.push(("appsecret_proof", &appsecret_proof));
+        }
+
+        let path = format!("{}{}", GRAPH_PREFIX, self.version);
+        let params = LogParams {
+            path: path.clone(),
+            params: query.clone(),
+            count: 0,
+            result: None,
+        };
+
+        if self.rate_limit_emulation {
+            (log)(params);
+            return Err(FbapiError::Facebook((*ERROR_VALUE).clone()));
+        }
+
+        let json = self
+            .execute_retry(
+                retry_count,
+                || async { self.client.post(&path).form(&query).send().await.map_err(|e| e.into()) },
+                &log,
+                params,
+            )
+            .await?;
+        batch_request::response_shaper(json)
     }
 
     async fn execute_retry<Executor, ResponseFutuer>(
