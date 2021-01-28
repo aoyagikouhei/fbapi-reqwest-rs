@@ -70,12 +70,7 @@ impl Fbapi
         }
 
         let path = format!("{}{}/{}?{}", GRAPH_PREFIX, self.version, fbid, query);
-        let params = LogParams {
-            path: path.clone(),
-            params: vec![],
-            count: 0,
-            result: None,
-        };
+        let params = LogParams::new(&path, &vec![]);
         if self.rate_limit_emulation {
             (log)(params);
             return Err(FbapiError::Facebook((*ERROR_VALUE).clone()));
@@ -113,16 +108,11 @@ impl Fbapi
         }
 
         let path = format!("{}{}", GRAPH_PREFIX, self.version);
-        let params = LogParams {
-            path: path.clone(),
-            params: query.clone(),
-            count: 0,
-            result: None,
-        };
+        let params = LogParams::new(&path, &query);
 
         if self.rate_limit_emulation {
             (log)(params);
-            return Err(FbapiError::Facebook((*ERROR_VALUE).clone()));
+            return batch_request::response_shaper(generate_rate_limit_array_for_batch(batch.batch_count));
         }
 
         let json = self
@@ -179,6 +169,17 @@ impl Fbapi
     }
 }
 
+fn generate_rate_limit_array_for_batch(count: usize) -> serde_json::Value {
+    let item = json!({
+        "code": 400,
+        "headers": [],
+        "body": ERROR_VALUE.to_string(),
+    });
+    let mut vec = Vec::new();
+    vec.resize(count, item);
+    serde_json::Value::Array(vec)
+}
+
 fn sign(base: &str, key: &str) -> String {
     let mut hmac = crypto::hmac::Hmac::new(crypto::sha2::Sha256::new(), key.as_bytes());
     hmac.input(base.as_bytes());
@@ -195,6 +196,21 @@ pub struct LogParams {
     pub params: Vec<(String, String)>,
     pub count: usize,
     pub result: Option<serde_json::Value>,
+}
+
+impl LogParams {
+    fn new(path: &str, params: &Vec<(&str, &str)>) -> Self {
+        let mut dst = vec![];
+        for param in params {
+            dst.push((param.0.to_owned(), param.1.to_owned()));
+        }
+        Self {
+            path: path.to_owned(),
+            params: dst,
+            count: 0,
+            result: None,
+        }
+    }
 }
 
 #[cfg(test)]

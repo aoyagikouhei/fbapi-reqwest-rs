@@ -5,6 +5,7 @@ use std::borrow::Cow;
 
 pub struct BatchRequest {
     inner: serde_json::Value,
+    pub batch_count: usize,
 }
 
 impl Into<serde_json::Value> for BatchRequest {
@@ -90,8 +91,10 @@ impl Builder {
     }
 
     pub fn build(self) -> Result<BatchRequest, FbapiError> {
+        let batch_count = self.items.len();
         Ok(BatchRequest {
             inner: serde_json::to_value(self.items)?,
+            batch_count: batch_count,
         })
     }
 }
