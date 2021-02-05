@@ -1,5 +1,5 @@
 use crate::error::FbapiError;
-use serde::{Serialize,};
+use serde::Serialize;
 
 use std::borrow::Cow;
 
@@ -26,9 +26,7 @@ pub struct Builder {
 
 impl Builder {
     pub fn new() -> Self {
-        Self {
-            items: Vec::new(),
-        }
+        Self { items: Vec::new() }
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
@@ -59,7 +57,12 @@ impl Builder {
 
     /// Add a named GET, suitable for method chaining through into build()
     #[inline]
-    pub fn get_with_name<'a, 'b, StrOrString1: Into<Cow<'a, str>>, StrOrString2: Into<Cow<'b, str>>>(
+    pub fn get_with_name<
+        'a,
+        'b,
+        StrOrString1: Into<Cow<'a, str>>,
+        StrOrString2: Into<Cow<'b, str>>,
+    >(
         mut self,
         name: StrOrString1,
         relative_url: StrOrString2,
@@ -71,14 +74,23 @@ impl Builder {
     }
 
     /// Add a named GET, suitable for use inside loop
-    pub fn add_get_with_name<'a, 'b, StrOrString1: Into<Cow<'a, str>>, StrOrString2: Into<Cow<'b, str>>>(
+    pub fn add_get_with_name<
+        'a,
+        'b,
+        StrOrString1: Into<Cow<'a, str>>,
+        StrOrString2: Into<Cow<'b, str>>,
+    >(
         &mut self,
         name: StrOrString1,
         relative_url: StrOrString2,
         params: &[(&str, &str)],
         response_on_success: ResponseOnSuccess,
     ) {
-        self.add_get_internal(Some((name.into(), response_on_success)), relative_url.into(), params);
+        self.add_get_internal(
+            Some((name.into(), response_on_success)),
+            relative_url.into(),
+            params,
+        );
     }
 
     fn add_get_internal<'a, 'b>(
@@ -87,7 +99,8 @@ impl Builder {
         relative_url: Cow<'b, str>,
         params: &[(&str, &str)],
     ) {
-        self.items.push(Item::Get(ItemCommon::new(name, relative_url, params)))
+        self.items
+            .push(Item::Get(ItemCommon::new(name, relative_url, params)))
     }
 
     pub fn build(self) -> Result<BatchRequest, FbapiError> {
@@ -123,14 +136,13 @@ impl ItemCommon {
         params: &[(&str, &str)],
     ) -> Self {
         let (name, omit_response_on_success) = match name {
-            Some((name, response_on_success)) =>
-                (
-                    Some(name.into_owned()),
-                    Some(match response_on_success {
-                        ResponseOnSuccess::Omit => true,
-                        ResponseOnSuccess::Preserve => false,
-                    })
-                ),
+            Some((name, response_on_success)) => (
+                Some(name.into_owned()),
+                Some(match response_on_success {
+                    ResponseOnSuccess::Omit => true,
+                    ResponseOnSuccess::Preserve => false,
+                }),
+            ),
             None => (None, None),
         };
         Self {
@@ -144,7 +156,8 @@ impl ItemCommon {
         if params.is_empty() {
             relative_url.into_owned()
         } else {
-            let query = params.into_iter()
+            let query = params
+                .into_iter()
                 .map(|&(key, value)| format!("{}={}", key, value))
                 .collect::<Vec<_>>()
                 .join("&");
@@ -173,12 +186,15 @@ enum Item {
     },
 }
 
-pub(crate) fn response_shaper(res: serde_json::Value) -> Result<Vec<Result<serde_json::Value, FbapiError>>, FbapiError> {
+pub(crate) fn response_shaper(
+    res: serde_json::Value,
+) -> Result<Vec<Result<serde_json::Value, FbapiError>>, FbapiError> {
     let list = match res {
         serde_json::Value::Array(vec) => vec,
         other => return Err(FbapiError::UnExpected(other)),
     };
-    Ok(list.into_iter()
+    Ok(list
+        .into_iter()
         .map(|json| {
             let body: serde_json::Value = match &json["body"] {
                 serde_json::Value::String(body) => serde_json::from_str(body)?,
@@ -205,18 +221,21 @@ mod tests {
             .get_with_name("bar", "baz", &[], ResponseOnSuccess::Preserve)
             .build()?;
         let json: serde_json::Value = batch.into();
-        assert_eq!(json, json!([
-            {
-                "relative_url": "foo?one=uno&two=dos",
-                "method": "GET",
-            },
-            {
-                "relative_url": "baz",
-                "method": "GET",
-                "name": "bar",
-                "omit_response_on_success": false,
-            }
-        ]));
+        assert_eq!(
+            json,
+            json!([
+                {
+                    "relative_url": "foo?one=uno&two=dos",
+                    "method": "GET",
+                },
+                {
+                    "relative_url": "baz",
+                    "method": "GET",
+                    "name": "bar",
+                    "omit_response_on_success": false,
+                }
+            ])
+        );
 
         Ok(())
     }
@@ -232,12 +251,15 @@ mod tests {
             },
         };
         let json = serde_json::to_value(item)?;
-        assert_eq!(json, json!({
-            "relative_url": "bar",
-            "name": "named",
-            "method": "POST",
-            "body": "jugemu jugemu",
-        }));
+        assert_eq!(
+            json,
+            json!({
+                "relative_url": "bar",
+                "name": "named",
+                "method": "POST",
+                "body": "jugemu jugemu",
+            })
+        );
 
         Ok(())
     }
@@ -270,10 +292,13 @@ mod tests {
         let results = response_shaper(responses)?;
         assert_eq!(results.len(), 3);
         assert_eq!(results[0].as_ref().ok(), Some(&serde_json::Value::Null));
-        assert_eq!(match &results[1] {
-            Err(FbapiError::Facebook(value)) => value,
-            _ => &serde_json::Value::Null,
-        }, &error_json);
+        assert_eq!(
+            match &results[1] {
+                Err(FbapiError::Facebook(value)) => value,
+                _ => &serde_json::Value::Null,
+            },
+            &error_json
+        );
         assert_eq!(results[2].as_ref().ok(), Some(&ok_json));
         Ok(())
     }

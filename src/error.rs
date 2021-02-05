@@ -11,6 +11,15 @@ pub enum FbapiError {
     #[error(transparent)]
     Json(#[from] serde_json::Error),
 
+    #[error(transparent)]
+    IO(#[from] std::io::Error),
+
     #[error("Faecbook unexpected json: {0}")]
     UnExpected(serde_json::Value),
+
+    #[error("Faecbook viedo error")]
+    VideoError,
+
+    #[error("Faecbook viedo check loop timeout error")]
+    VideoTimeout,
 }

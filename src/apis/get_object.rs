@@ -9,7 +9,7 @@ impl Fbapi {
         fields: &str,
         params: &[(&str, &str)],
         retry_count: usize,
-        log:  impl Fn(LogParams),
+        log: impl Fn(LogParams),
     ) -> Result<serde_json::Value, FbapiError> {
         let mut query = [("access_token", access_token), ("fields", fields)]
             .iter()
@@ -29,15 +29,12 @@ impl Fbapi {
             (log)(params);
             return Err(FbapiError::Facebook((*ERROR_VALUE).clone()));
         }
-        let json = self
-            .execute_retry(
-                retry_count,
-                || async { self.client.get(&path).send().await.map_err(|e| e.into()) },
-                &log,
-                params,
-            )
-            .await?;
-
-        Ok(json)
+        execute_retry(
+            retry_count,
+            || async { self.client.get(&path).send().await.map_err(|e| e.into()) },
+            &log,
+            params,
+        )
+        .await
     }
 }
