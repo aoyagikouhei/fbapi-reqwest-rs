@@ -9,9 +9,8 @@ use crate::error::FbapiError;
 use crypto::mac::Mac;
 use once_cell::sync::Lazy;
 use reqwest::{multipart::Part, Body};
-use std::{future::Future, path::Path, time::Duration};
-use tokio::{fs::File, time::delay_for};
-use tokio_util::codec::{BytesCodec, FramedRead};
+use std::{future::Future, time::Duration};
+use tokio::time::delay_for;
 
 const GRAPH_PREFIX: &'static str = "https://graph.facebook.com/";
 const VIDEO_PREFIX: &'static str = "https://graph-video.facebook.com/";
@@ -103,6 +102,31 @@ where
     Err(last_error)
 }
 
+pub(crate) async fn execute_form(
+    client: &reqwest::Client,
+    path: &str,
+    form: reqwest::multipart::Form,
+    log: &impl Fn(LogParams),
+    log_params: LogParams,
+) -> Result<serde_json::Value, FbapiError> {
+    log(log_params.clone());
+    let json: serde_json::Value = client
+        .post(path)
+        .multipart(form)
+        .send()
+        .await?
+        .json()
+        .await?;
+    let mut log_params = log_params.clone();
+    log_params.result = Some(json.clone());
+    log(log_params);
+    if json["error"].is_object() {
+        Err(FbapiError::Facebook(json))
+    } else {
+        Ok(json)
+    }
+}
+
 fn sign(base: &str, key: &str) -> String {
     let mut hmac = crypto::hmac::Hmac::new(crypto::sha2::Sha256::new(), key.as_bytes());
     hmac.input(base.as_bytes());
@@ -136,12 +160,9 @@ impl LogParams {
     }
 }
 
-pub(crate) async fn make_part(path: &Path) -> Result<Part, FbapiError> {
-    let file_name: String = path.file_name().unwrap().to_string_lossy().into();
-    let opeded_file = File::open(path).await?;
-    let reader = FramedRead::new(opeded_file, BytesCodec::new());
-    Part::stream(Body::wrap_stream(reader))
-        .file_name(file_name.clone())
+pub(crate) fn make_part(path: &str, bytes: rusoto_core::ByteStream) -> Result<Part, FbapiError> {
+    Part::stream(Body::wrap_stream(bytes))
+        .file_name(path.to_owned())
         .mime_str("application/octet-stream")
         .map_err(|e| e.into())
 }
