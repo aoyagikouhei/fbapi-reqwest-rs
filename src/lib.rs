@@ -12,6 +12,8 @@ use reqwest::{multipart::Part, Body};
 use std::{future::Future, time::Duration};
 use tokio::time::delay_for;
 
+pub use reqwest;
+
 const GRAPH_PREFIX: &'static str = "https://graph.facebook.com/";
 const VIDEO_PREFIX: &'static str = "https://graph-video.facebook.com/";
 
