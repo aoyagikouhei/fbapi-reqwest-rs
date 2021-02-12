@@ -24,7 +24,7 @@ impl Fbapi {
         .await?;
         check_loop(
             &self.make_path(&format!(
-                "{}??fields=status&access_token={}",
+                "{}?fields=status&access_token={}",
                 fbid, access_token
             )),
             retry_count,
