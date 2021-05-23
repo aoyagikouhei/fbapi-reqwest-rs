@@ -80,7 +80,7 @@ impl Fbapi {
         )
         .await?;
 
-        post_to_video_tab(
+        post_to_videos_tab(
             &self.make_path(&fbid),
             access_token,
             retry_count,
@@ -187,7 +187,7 @@ async fn post(
     .await
 }
 
-async fn post_to_video_tab(
+async fn post_to_videos_tab(
     path: &str,
     access_token: &str,
     retry_count: usize,
