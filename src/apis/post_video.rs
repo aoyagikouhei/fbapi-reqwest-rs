@@ -44,9 +44,8 @@ impl Fbapi {
         .await
     }
 
-    /// 直接 Newsfeed に投稿できない現象が発生している
-    /// 一度 VideosTab に公開してから Newsfeed に公開する
-    /// （この現象が発生しなくなったらこのメソッドは削除できる）
+    /// 直接 Newsfeed に投稿できない現象が発生している。
+    /// 一度 VideosTab に公開してから Newsfeed に公開する。
     pub async fn post_video_via_videos_tab(
         &self,
         access_token: &str,
