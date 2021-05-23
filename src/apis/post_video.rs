@@ -43,6 +43,62 @@ impl Fbapi {
         )
         .await
     }
+
+    /// 直接 Newsfeed に投稿できない現象が発生している
+    /// 一度 VideosTab に公開してから Newsfeed に公開する
+    /// （この現象が発生しなくなったらこのメソッドは削除できる）
+    pub async fn post_video_via_videos_tab(
+        &self,
+        access_token: &str,
+        page_fbid: &str,
+        url: &str,
+        description: &str,
+        check_retry_count: usize,
+        check_video_delay: usize,
+        retry_count: usize,
+        long_client: reqwest::Client,
+        log: impl Fn(LogParams),
+    ) -> Result<serde_json::Value, FbapiError> {
+        let fbid = video(
+            &self.make_video_path(&format!("{}/videos", page_fbid)),
+            access_token,
+            url,
+            description,
+            &long_client,
+            &log,
+        )
+        .await?;
+        check_loop(
+            &self.make_path(&format!(
+                "{}?fields=status&access_token={}",
+                fbid, access_token
+            )),
+            retry_count,
+            check_retry_count,
+            check_video_delay,
+            &self.client,
+            &log,
+        )
+        .await?;
+
+        post_to_video_tab(
+            &self.make_path(&fbid),
+            access_token,
+            retry_count,
+            &self.client,
+            &log,
+        )
+        .await?;
+
+        post(
+            &self.make_path(&fbid),
+            access_token,
+            retry_count,
+            &self.client,
+            &log,
+        )
+        .await
+    }
 }
 
 async fn video(
@@ -113,6 +169,35 @@ async fn post(
     let params = vec![
         ("access_token", access_token),
         ("publish_to_news_feed", "true"),
+        ("fields", "id"),
+    ];
+    let log_params = LogParams::new(path, &params);
+    execute_retry(
+        retry_count,
+        || async {
+            client
+                .post(path)
+                .form(&params)
+                .send()
+                .await
+                .map_err(|e| e.into())
+        },
+        log,
+        log_params,
+    )
+    .await
+}
+
+async fn post_to_video_tab(
+    path: &str,
+    access_token: &str,
+    retry_count: usize,
+    client: &reqwest::Client,
+    log: &impl Fn(LogParams),
+) -> Result<serde_json::Value, FbapiError> {
+    let params = vec![
+        ("access_token", access_token),
+        ("publish_to_videos_tab", "true"),
         ("fields", "id"),
     ];
     let log_params = LogParams::new(path, &params);
