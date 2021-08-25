@@ -14,4 +14,4 @@ serde = { version = "~1.0", features = ["derive"] }
 serde_json = "~1.0"
 thiserror = "~1.0.26"
 tokio = { version = "~1", features = ["macros", "time", "fs"] }
-tokio-util = { version = "~0.6.7", features = ["codec", "io"] }
+tokio-util = { version = "~0.6.7", features = ["codec"] }
