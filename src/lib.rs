@@ -211,12 +211,14 @@ mod tests {
         println!("{:?}", res);
         */
 
+        let access_token = std::env::var("ACCESS_TOKEN").unwrap_or("".to_string());
+
         let res = api.post_album_photo(
-            access_token,
+            &access_token,
             "188768994493732",
-            &media_file,
             "test",
             "caption",
+            &media_file,
             |params| {
                 println!(
                     "params {},{:?},{},{:?}",
