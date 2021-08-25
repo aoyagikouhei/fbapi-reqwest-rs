@@ -161,8 +161,10 @@ impl LogParams {
     }
 }
 
-pub(crate) fn make_part(path: &str, bytes: rusoto_core::ByteStream) -> Result<Part, FbapiError> {
-    Part::stream(Body::wrap_stream(bytes))
+pub(crate) fn make_part(path: &str, file: &std::fs::File) -> Result<Part, FbapiError> {
+    let tokio_file = tokio::fs::File::from_std(file.try_clone()?);
+    let stream = tokio_util::codec::FramedRead::new(tokio_file, tokio_util::codec::BytesCodec::new());
+    Part::stream(Body::wrap_stream(stream))
         .file_name(path.to_owned())
         .mime_str("application/octet-stream")
         .map_err(|e| e.into())
@@ -178,15 +180,50 @@ mod tests {
 
     #[tokio::test]
     async fn it_works() {
-        let api = Fbapi::new("v8.0", 10, true).unwrap();
+        let api = Fbapi::new("v8.0", 10, false).unwrap();
+        /*
         let res = api
-            .get_object("xxxx", None, "aaa", "", &vec![], 2, |params| {
+            .get_object(access_token, None, "me", "id,name", &vec![], 2, |params| {
                 println!(
                     "params {},{:?},{},{:?}",
                     params.path, params.params, params.count, params.result
                 )
             })
             .await;
+        println!("{:?}", res);
+        */
+
+        let media_file = std::fs::File::open("./test.png").unwrap();
+        /*
+        let res = api.post_picture(
+            access_token,
+            "188768994493732",
+            &media_file,
+            "test",
+            "caption",
+            |params| {
+                println!(
+                    "params {},{:?},{},{:?}",
+                    params.path, params.params, params.count, params.result
+                )
+            }
+        ).await;
+        println!("{:?}", res);
+        */
+
+        let res = api.post_album_photo(
+            access_token,
+            "188768994493732",
+            &media_file,
+            "test",
+            "caption",
+            |params| {
+                println!(
+                    "params {},{:?},{},{:?}",
+                    params.path, params.params, params.count, params.result
+                )
+            }
+        ).await;
         println!("{:?}", res);
     }
 }
