@@ -18,6 +18,7 @@ impl Fbapi {
         let part = make_part("thumnail", bytes)?;
         let form = Form::new()
             .text("access_token", access_token.to_string())
+            .text("is_preferred", "true")
             .part("source", part);
         execute_form(&self.client, &path, form, &log, log_params).await
     }
