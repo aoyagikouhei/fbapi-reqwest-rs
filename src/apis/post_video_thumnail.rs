@@ -7,17 +7,15 @@ impl Fbapi {
         access_token: &str,
         video_id: &str,
         bytes: rusoto_core::ByteStream,
-        file_path: &str,
         log: impl Fn(LogParams),
     ) -> Result<serde_json::Value, FbapiError> {
         let path = self.make_path(&format!("{}/thumbnails", video_id));
         let params = vec![
             ("access_token", access_token),
-            ("file_path", file_path),
             ("video_id", video_id),
         ];
         let log_params = LogParams::new(&path, &params);
-        let part = make_part(file_path, bytes)?;
+        let part = make_part("thumnail", bytes)?;
         let form = Form::new()
             .text("access_token", access_token.to_string())
             .part("source", part);

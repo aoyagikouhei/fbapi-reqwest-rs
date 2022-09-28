@@ -7,6 +7,7 @@ impl Fbapi {
         page_fbid: &str,
         url: &str,
         description: &str,
+        thumb: Option<rusoto_core::ByteStream>,
         check_retry_count: usize,
         check_video_delay: usize,
         retry_count: usize,
@@ -34,6 +35,15 @@ impl Fbapi {
             &log,
         )
         .await?;
+        
+        // サムネルがあれば、サムネル設定します。
+        match thumb {
+            Some(bytes) => {
+                self.post_video_thumnail(access_token, &fbid, bytes, &log).await?;
+            },
+            None => {}
+        };
+        
         post(
             &self.make_path(&fbid),
             access_token,
@@ -52,6 +62,7 @@ impl Fbapi {
         page_fbid: &str,
         url: &str,
         description: &str,
+        thumb: Option<rusoto_core::ByteStream>,
         check_retry_count: usize,
         check_video_delay: usize,
         retry_count: usize,
@@ -79,6 +90,14 @@ impl Fbapi {
             &log,
         )
         .await?;
+        
+        // サムネルがあれば、サムネル設定します。
+        match thumb {
+            Some(bytes) => {
+                self.post_video_thumnail(access_token, &fbid, bytes, &log).await?;
+            },
+            None => {}
+        };
 
         post_to_videos_tab(
             &self.make_path(&fbid),
