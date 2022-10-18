@@ -9,3 +9,4 @@ pub mod post_ig_video;
 pub mod post_object;
 pub mod post_picture;
 pub mod post_video;
+pub mod post_video_thumnail;
