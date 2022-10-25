@@ -35,15 +35,16 @@ impl Fbapi {
             &log,
         )
         .await?;
-        
+
         // サムネルがあれば、サムネル設定します。
         match thumb {
             Some(bytes) => {
-                self.post_video_thumnail(access_token, &fbid, bytes, &log).await?;
-            },
+                self.post_video_thumnail(access_token, &fbid, bytes, &log)
+                    .await?;
+            }
             None => {}
         };
-        
+
         post(
             &self.make_path(&fbid),
             access_token,
@@ -90,12 +91,13 @@ impl Fbapi {
             &log,
         )
         .await?;
-        
+
         // サムネルがあれば、サムネル設定します。
         match thumb {
             Some(bytes) => {
-                self.post_video_thumnail(access_token, &fbid, bytes, &log).await?;
-            },
+                self.post_video_thumnail(access_token, &fbid, bytes, &log)
+                    .await?;
+            }
             None => {}
         };
 
