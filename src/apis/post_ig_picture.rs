@@ -15,6 +15,7 @@ impl Fbapi {
             &access_token,
             &image_url,
             &caption,
+            false,
             retry_count,
             &self.client,
             &log,
@@ -31,6 +32,30 @@ impl Fbapi {
         )
         .await
     }
+
+    // Return container id when success
+    pub async fn post_ig_image_container(
+        &self,
+        access_token: &str,
+        account_igid: &str,
+        image_url: &str,
+        caption: &str,
+        is_carousel_item: bool,
+        retry_count: usize,
+        log: impl Fn(LogParams),
+    ) -> Result<String, FbapiError> {
+        post(
+            &self.make_path(&format!("{}/media", account_igid)),
+            &access_token,
+            &image_url,
+            &caption,
+            is_carousel_item,
+            retry_count,
+            &self.client,
+            &log,
+        )
+        .await
+    }
 }
 
 async fn post(
@@ -38,6 +63,7 @@ async fn post(
     access_token: &str,
     image_url: &str,
     caption: &str,
+    is_carousel_item: bool,
     retry_count: usize,
     client: &reqwest::Client,
     log: impl Fn(LogParams),
@@ -46,7 +72,12 @@ async fn post(
         ("access_token", access_token),
         ("image_url", image_url),
         ("caption", caption),
+        (
+            "is_carousel_item",
+            if is_carousel_item { "true" } else { "false" },
+        ),
     ];
+
     let log_params = LogParams::new(&path, &params);
     let res = execute_retry(
         retry_count,

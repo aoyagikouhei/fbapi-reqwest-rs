@@ -17,6 +17,7 @@ impl Fbapi {
             &access_token,
             &video_url,
             &caption,
+            false,
             retry_count,
             &self.client,
             &log,
@@ -46,6 +47,47 @@ impl Fbapi {
         )
         .await
     }
+
+    // Return container id when success
+    pub async fn post_ig_video_container(
+        &self,
+        access_token: &str,
+        account_igid: &str,
+        video_url: &str,
+        caption: &str,
+        is_carousel_item: bool,
+        check_retry_count: usize,
+        check_video_delay: usize,
+        retry_count: usize,
+        log: impl Fn(LogParams),
+    ) -> Result<String, FbapiError> {
+        let container_id = post(
+            &self.make_path(&format!("{}/media", account_igid)),
+            &access_token,
+            &video_url,
+            &caption,
+            is_carousel_item,
+            retry_count,
+            &self.client,
+            &log,
+        )
+        .await?;
+
+        check_loop(
+            &self.make_path(&format!(
+                "{}?fields=status_code&access_token={}",
+                container_id, access_token
+            )),
+            check_retry_count,
+            check_video_delay,
+            retry_count,
+            &self.client,
+            &log,
+        )
+        .await?;
+
+        Ok(container_id)
+    }
 }
 
 async fn post(
@@ -53,6 +95,7 @@ async fn post(
     access_token: &str,
     video_url: &str,
     caption: &str,
+    is_carousel_item: bool,
     retry_count: usize,
     client: &reqwest::Client,
     log: impl Fn(LogParams),
@@ -62,6 +105,10 @@ async fn post(
         ("media_type", "VIDEO"),
         ("video_url", video_url),
         ("caption", caption),
+        (
+            "is_carousel_item",
+            if is_carousel_item { "true" } else { "false" },
+        ),
     ];
     let log_params = LogParams::new(&path, &params);
     let res = execute_retry(
