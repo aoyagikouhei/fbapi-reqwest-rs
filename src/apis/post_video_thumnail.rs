@@ -10,10 +10,7 @@ impl Fbapi {
         log: impl Fn(LogParams),
     ) -> Result<serde_json::Value, FbapiError> {
         let path = self.make_path(&format!("{}/thumbnails", video_id));
-        let params = vec![
-            ("access_token", access_token),
-            ("video_id", video_id),
-        ];
+        let params = vec![("access_token", access_token), ("video_id", video_id)];
         let log_params = LogParams::new(&path, &params);
         let part = make_part("thumnail", bytes)?;
         let form = Form::new()
