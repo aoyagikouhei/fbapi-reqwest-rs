@@ -1,3 +1,4 @@
+pub mod check_ig_media;
 pub mod create_album;
 pub mod delete_object;
 pub mod get_object;
