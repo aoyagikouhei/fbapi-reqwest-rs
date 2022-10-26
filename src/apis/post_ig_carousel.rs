@@ -37,12 +37,11 @@ impl Fbapi {
         )
         .await?;
 
-        publish(
-            &self.make_path(&format!("{}/media_publish", account_igid)),
+        self.post_ig_media_publish(
             &access_token,
+            &account_igid,
             &creation_id,
             retry_count,
-            &self.client,
             &log,
         )
         .await
