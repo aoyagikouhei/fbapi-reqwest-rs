@@ -26,7 +26,7 @@ impl Fbapi {
 
         check_ig_media_loop(
             &self.make_path(&format!(
-                "{}?fields=status_code&access_token={}",
+                "{}?fields=status,status_code&access_token={}",
                 creation_id, access_token
             )),
             check_retry_count,

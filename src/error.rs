@@ -15,14 +15,17 @@ pub enum FbapiError {
     #[error(transparent)]
     IO(#[from] std::io::Error),
 
-    #[error("Faecbook unexpected json: {0}")]
+    #[error("Facebook unexpected json: {0}")]
     UnExpected(serde_json::Value),
 
-    #[error("Faecbook viedo error")]
+    #[error("Facebook viedo error")]
     VideoError,
 
-    #[error("Faecbook viedo check loop timeout error")]
+    #[error("Facebook viedo check loop timeout error")]
     VideoTimeout,
+
+    #[error("Instagram viedo error: {0}")]
+    IgVideoError(serde_json::Value),
 }
 
 // ユーザに表示するエラー内容
