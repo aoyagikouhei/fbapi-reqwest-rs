@@ -2,12 +2,13 @@ use crate::apis::check_ig_media::check_ig_media_loop;
 use crate::*;
 
 impl Fbapi {
-    pub async fn post_ig_carousel(
+    pub async fn post_ig_reel(
         &self,
         access_token: &str,
         account_igid: &str,
+        video_url: &str,
         caption: &str,
-        children: &Vec<String>,
+        is_share_to_feed: bool,
         check_retry_count: usize,
         check_video_delay: usize,
         retry_count: usize,
@@ -16,8 +17,9 @@ impl Fbapi {
         let creation_id = post(
             &self.make_path(&format!("{}/media", account_igid)),
             &access_token,
+            &video_url,
             &caption,
-            &children,
+            is_share_to_feed,
             retry_count,
             &self.client,
             &log,
@@ -51,18 +53,22 @@ impl Fbapi {
 async fn post(
     path: &str,
     access_token: &str,
+    video_url: &str,
     caption: &str,
-    children: &Vec<String>,
+    is_share_to_feed: bool,
     retry_count: usize,
     client: &reqwest::Client,
     log: impl Fn(LogParams),
 ) -> Result<String, FbapiError> {
-    let children_str = &children.join(",");
     let params = vec![
         ("access_token", access_token),
-        ("media_type", "CAROUSEL"),
-        ("children", children_str),
+        ("media_type", "REELS"),
+        ("video_url", video_url),
         ("caption", caption),
+        (
+            "share_to_feed",
+            if is_share_to_feed { "true" } else { "false" },
+        ),
     ];
     let log_params = LogParams::new(&path, &params);
     let res = execute_retry(
@@ -83,30 +89,4 @@ async fn post(
         Some(s) => Ok(s.to_owned()),
         None => return Err(FbapiError::UnExpected(res)),
     }
-}
-
-async fn publish(
-    path: &str,
-    access_token: &str,
-    creation_id: &str,
-    retry_count: usize,
-    client: &reqwest::Client,
-    log: impl Fn(LogParams),
-) -> Result<serde_json::Value, FbapiError> {
-    let params = vec![("access_token", access_token), ("creation_id", creation_id)];
-    let log_params = LogParams::new(&path, &params);
-    execute_retry(
-        retry_count,
-        || async {
-            client
-                .post(path)
-                .form(&params)
-                .send()
-                .await
-                .map_err(|e| e.into())
-        },
-        &log,
-        log_params,
-    )
-    .await
 }
