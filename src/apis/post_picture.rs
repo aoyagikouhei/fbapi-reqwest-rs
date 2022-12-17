@@ -6,7 +6,7 @@ impl Fbapi {
         &self,
         access_token: &str,
         page_fbid: &str,
-        bytes: rusoto_core::ByteStream,
+        media_file: &std::fs::File,
         file_path: &str,
         caption: &str,
         log: impl Fn(LogParams),
@@ -19,7 +19,7 @@ impl Fbapi {
             ("published", "false"),
         ];
         let log_params = LogParams::new(&path, &params);
-        let part = make_part(file_path, bytes)?;
+        let part = make_part(file_path, media_file)?;
         let form = Form::new()
             .text("access_token", access_token.to_string())
             .text("caption", caption.to_string())

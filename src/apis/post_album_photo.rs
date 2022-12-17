@@ -8,7 +8,7 @@ impl Fbapi {
         album_fbid: &str,
         file_path: &str,
         message: &str,
-        bytes: rusoto_core::ByteStream,
+        media_file: &std::fs::File,
         log: impl Fn(LogParams),
     ) -> Result<serde_json::Value, FbapiError> {
         let path = self.make_path(&format!("{}/photos", album_fbid));
@@ -19,7 +19,7 @@ impl Fbapi {
             ("published", "true"),
         ];
         let log_params = LogParams::new(&path, &params);
-        let part = make_part(file_path, bytes)?;
+        let part = make_part(file_path, media_file)?;
         let form = Form::new()
             .text("access_token", access_token.to_string())
             .text("message", message.to_string())
