@@ -36,7 +36,7 @@ pub(crate) async fn check_ig_media_loop(
             "IN_PROGRESS" => {}
             _ => return Err(FbapiError::IgVideoError(res)),
         }
-        sleep(check_video_delay).await;
+        sleep_sec(check_video_delay).await;
     }
     Err(FbapiError::VideoTimeout)
 }

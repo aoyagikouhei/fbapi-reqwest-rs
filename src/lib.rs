@@ -10,7 +10,7 @@ use crypto::mac::Mac;
 use once_cell::sync::Lazy;
 use reqwest::{multipart::Part, Body};
 use std::{future::Future, time::Duration};
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 pub use reqwest;
 
@@ -169,8 +169,8 @@ pub(crate) fn make_part(path: &str, bytes: rusoto_core::ByteStream) -> Result<Pa
         .map_err(|e| e.into())
 }
 
-pub(crate) async fn sleep(seconds: usize) {
-    delay_for(Duration::from_secs(seconds as u64)).await
+pub(crate) async fn sleep_sec(seconds: usize) {
+    sleep(Duration::from_secs(seconds as u64)).await
 }
 
 #[cfg(test)]
