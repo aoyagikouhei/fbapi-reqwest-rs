@@ -251,7 +251,7 @@ async fn check_loop(
             "processing" => {}
             _ => return Err(FbapiError::VideoError),
         }
-        sleep(check_video_delay).await;
+        sleep_sec(check_video_delay).await;
     }
     Err(FbapiError::VideoTimeout)
 }
