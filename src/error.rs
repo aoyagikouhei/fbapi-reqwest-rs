@@ -42,7 +42,6 @@ struct FbError {
 struct FbDetailError {
     code: u64,
     error_subcode: Option<u64>,
-    message: String,
 }
 
 impl FbapiError {
