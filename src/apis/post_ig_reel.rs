@@ -7,6 +7,7 @@ impl Fbapi {
         access_token: &str,
         account_igid: &str,
         video_url: &str,
+        cover_url: Option<&str>,
         caption: &str,
         is_share_to_feed: bool,
         check_retry_count: usize,
@@ -18,6 +19,7 @@ impl Fbapi {
             &self.make_path(&format!("{}/media", account_igid)),
             &access_token,
             &video_url,
+            cover_url,
             &caption,
             is_share_to_feed,
             retry_count,
@@ -54,13 +56,14 @@ async fn post(
     path: &str,
     access_token: &str,
     video_url: &str,
+    cover_url: Option<&str>,
     caption: &str,
     is_share_to_feed: bool,
     retry_count: usize,
     client: &reqwest::Client,
     log: impl Fn(LogParams),
 ) -> Result<String, FbapiError> {
-    let params = vec![
+    let mut params = vec![
         ("access_token", access_token),
         ("media_type", "REELS"),
         ("video_url", video_url),
@@ -70,6 +73,11 @@ async fn post(
             if is_share_to_feed { "true" } else { "false" },
         ),
     ];
+
+    if let Some(url) = cover_url {
+        params.push(("cover_url", url));
+    }
+
     let log_params = LogParams::new(&path, &params);
     let res = execute_retry(
         retry_count,
