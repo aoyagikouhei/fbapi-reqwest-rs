@@ -26,6 +26,9 @@ pub enum FbapiError {
 
     #[error("Instagram viedo error: {0}")]
     IgVideoError(serde_json::Value),
+
+    #[error("Copyright violation detected")]
+    CopyRight,
 }
 
 // ユーザに表示するエラー内容
