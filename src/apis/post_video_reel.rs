@@ -203,7 +203,12 @@ impl Fbapi {
             let post_id = finish_res["post_id"].as_str();
             match post_id {
                 Some(id) => {
-                    // ７．processing_phase を確認する。
+                    // ７．processing_phase を確認する前に、APIの遅延対策として3秒待機
+                    // Facebook APIの遅延が発生する場合があるため、3秒待機する
+                    sleep_sec(3).await;
+
+                    let mut retry_count = 0;
+                    let mut max_retry_check_status_video = 3;
                     loop {
                         let log_params = LogParams::new(&check_path, &vec![]);
                         let status_res: serde_json::Value = execute_retry(
@@ -219,6 +224,20 @@ impl Fbapi {
                             log_params,
                         )
                         .await?;
+
+                        if let Some(error_obj) = status_res.get("error") {
+                            let code = error_obj.get("code").and_then(|v| v.as_u64());
+                            let subcode = error_obj.get("error_subcode").and_then(|v| v.as_u64());
+                            if code == Some(100) && subcode == Some(33) {
+                                if retry_count < max_retry_check_status_video {
+                                    retry_count += 1;
+                                    sleep_sec(3).await;
+                                    continue;
+                                } else {
+                                    return Err(FbapiError::VideoDelayed);
+                                }
+                            }
+                        }
 
                         let processing_status =
                             status_res["status"]["processing_phase"]["status"].as_str();

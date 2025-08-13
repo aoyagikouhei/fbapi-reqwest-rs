@@ -29,6 +29,9 @@ pub enum FbapiError {
 
     #[error("Copyright violation detected")]
     CopyRight,
+
+    #[error("Facebook video delayed, retry recommended")]
+    VideoDelayed,
 }
 
 // ユーザに表示するエラー内容
