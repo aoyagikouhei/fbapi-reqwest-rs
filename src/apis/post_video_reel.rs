@@ -247,8 +247,12 @@ impl Fbapi {
                         let publishing_status =
                             status_res["status"]["publishing_phase"]["status"].as_str();
 
-                        if Some("not_started") == processing_status && Some("not_started") == publishing_status {
-                            if timeout_upload_phase_not_started < max_timeout_upload_phase_not_started {
+                        if Some("not_started") == processing_status
+                            && Some("not_started") == publishing_status
+                        {
+                            if timeout_upload_phase_not_started
+                                < max_timeout_upload_phase_not_started
+                            {
                                 sleep_sec(2).await;
                                 timeout_upload_phase_not_started += 2;
                                 continue;
