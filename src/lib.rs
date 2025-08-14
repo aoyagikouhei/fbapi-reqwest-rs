@@ -16,6 +16,7 @@ pub use reqwest;
 
 const GRAPH_PREFIX: &'static str = "https://graph.facebook.com/";
 const VIDEO_PREFIX: &'static str = "https://graph-video.facebook.com/";
+const VIDEO_REEL_URL_PREFIX: &'static str = "https://rupload.facebook.com/video-upload/";
 
 static ERROR_VALUE: Lazy<serde_json::Value> = Lazy::new(|| {
     json!({
@@ -53,6 +54,10 @@ impl Fbapi {
 
     fn make_video_path(&self, postfix: &str) -> String {
         format!("{}{}/{}", VIDEO_PREFIX, self.version, postfix)
+    }
+
+    fn make_video_reel_path(&self, video_id: &str) -> String {
+        format!("{}{}/{}", VIDEO_REEL_URL_PREFIX, self.version, video_id)
     }
 
     pub fn make_client(timeout_seconds: u64) -> Result<reqwest::Client, FbapiError> {

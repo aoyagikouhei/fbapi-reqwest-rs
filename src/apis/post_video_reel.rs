@@ -4,16 +4,15 @@ use crate::*;
 
 impl Fbapi {
     pub async fn post_video_reel(
-    &self,
-    access_token: &str,
-    page_fbid: &str,
-    file_url: &str,
-    description: &str,
-    thumb: Option<rusoto_core::ByteStream>,
-    long_client: reqwest::Client,
-    log: impl Fn(LogParams),
+        &self,
+        access_token: &str,
+        page_fbid: &str,
+        file_url: &str,
+        description: &str,
+        thumb: Option<rusoto_core::ByteStream>,
+        long_client: reqwest::Client,
+        log: impl Fn(LogParams),
     ) -> Result<Value, FbapiError> {
-
         // １．アップロード用のURLを取得して動画をアップロードする。
         let path = self.make_path(&format!("{}/video_reels", page_fbid));
         let params = vec![("access_token", access_token), ("upload_phase", "start")];
@@ -33,17 +32,17 @@ impl Fbapi {
         )
         .await?;
 
-        let upload_reel_url = res_request["upload_url"].as_str();
         let video_id = res_request["video_id"].as_str();
 
         // ２．video_urlを使って動画をアップロードする。
-        if let (Some(upload_reel_url), Some(video_id)) = (upload_reel_url, video_id) {
-            let log_params = LogParams::new(upload_reel_url, &vec![("file_url", file_url)]);
+        if let (Some(video_id)) = (video_id) {
+            let upload_reel_url = self.make_video_reel_path(video_id);
+            let log_params = LogParams::new(&upload_reel_url, &vec![("file_url", file_url)]);
             let upload_response: serde_json::Value = execute_retry(
                 0,
                 || async {
                     long_client
-                        .post(upload_reel_url)
+                        .post(&upload_reel_url)
                         .header("Authorization", format!("OAuth {}", access_token))
                         .header("file_url", file_url)
                         .send()
@@ -207,8 +206,12 @@ impl Fbapi {
                     // Facebook APIの遅延が発生する場合があるため、3秒待機する
                     sleep_sec(3).await;
 
-                    let mut retry_count = 0;
-                    let mut max_retry_check_status_video = 3;
+                    let mut retry_count_video_delay = 0;
+                    let mut max_retry_video_delay = 3;
+                    //アップロードフェーズは呼び出されたものの、Fb API が不安定になり、published が実行されず、status にエラーも返されない可能性があります。
+                    //そのため、API のステータス更新を待機する時間は 2 分となります。
+                    let mut timeout_upload_phase_not_started = 0;
+                    let mut max_timeout_upload_phase_not_started = 120;
                     loop {
                         let log_params = LogParams::new(&check_path, &vec![]);
                         let status_res: serde_json::Value = execute_retry(
@@ -229,8 +232,8 @@ impl Fbapi {
                             let code = error_obj.get("code").and_then(|v| v.as_u64());
                             let subcode = error_obj.get("error_subcode").and_then(|v| v.as_u64());
                             if code == Some(100) && subcode == Some(33) {
-                                if retry_count < max_retry_check_status_video {
-                                    retry_count += 1;
+                                if retry_count_video_delay < max_retry_video_delay {
+                                    retry_count_video_delay += 1;
                                     sleep_sec(3).await;
                                     continue;
                                 } else {
@@ -241,6 +244,22 @@ impl Fbapi {
 
                         let processing_status =
                             status_res["status"]["processing_phase"]["status"].as_str();
+                        let publishing_status =
+                            status_res["status"]["publishing_phase"]["status"].as_str();
+
+                        if Some("not_started") == processing_status
+                            && Some("not_started") == publishing_status
+                        {
+                            if timeout_upload_phase_not_started
+                                < max_timeout_upload_phase_not_started
+                            {
+                                sleep_sec(2).await;
+                                timeout_upload_phase_not_started += 2;
+                                continue;
+                            } else {
+                                return Err(FbapiError::UploadReelNotStarted);
+                            }
+                        }
 
                         match processing_status {
                             Some("complete") => break,
