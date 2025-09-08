@@ -15,7 +15,7 @@ impl Fbapi {
         log: impl Fn(LogParams),
     ) -> Result<serde_json::Value, FbapiError> {
         let fbid = video(
-            &self.make_video_path(&format!("{}/videos", page_fbid)),
+            &self.make_path(&format!("{}/videos", page_fbid)),
             access_token,
             url,
             description,
@@ -71,7 +71,7 @@ impl Fbapi {
         log: impl Fn(LogParams),
     ) -> Result<serde_json::Value, FbapiError> {
         let fbid = video(
-            &self.make_video_path(&format!("{}/videos", page_fbid)),
+            &self.make_path(&format!("{}/videos", page_fbid)),
             access_token,
             url,
             description,
