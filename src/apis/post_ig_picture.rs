@@ -1,3 +1,4 @@
+use crate::apis::check_ig_media::check_ig_media_loop;
 use crate::*;
 
 impl Fbapi {
@@ -7,6 +8,8 @@ impl Fbapi {
         account_igid: &str,
         image_url: &str,
         caption: &str,
+        check_retry_count: usize,
+        check_delay: usize,
         retry_count: usize,
         log: impl Fn(LogParams),
     ) -> Result<serde_json::Value, FbapiError> {
@@ -16,6 +19,19 @@ impl Fbapi {
             &image_url,
             &caption,
             false,
+            retry_count,
+            &self.client,
+            &log,
+        )
+        .await?;
+
+        check_ig_media_loop(
+            &self.make_path(&format!(
+                "{}?fields=status,status_code&access_token={}",
+                creation_id, access_token
+            )),
+            check_retry_count,
+            check_delay,
             retry_count,
             &self.client,
             &log,
