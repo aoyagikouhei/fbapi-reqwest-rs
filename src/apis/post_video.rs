@@ -14,6 +14,40 @@ impl Fbapi {
         long_client: reqwest::Client,
         log: impl Fn(LogParams),
     ) -> Result<serde_json::Value, FbapiError> {
+        let fbid = self
+            .upload_video(
+                access_token,
+                page_fbid,
+                url,
+                description,
+                thumb,
+                check_retry_count,
+                check_video_delay,
+                retry_count,
+                long_client,
+                &log,
+            )
+            .await?;
+
+        self.publish_video(access_token, &fbid, false, retry_count, &log)
+            .await
+    }
+
+    /// Upload a video, check its status, and set thumbnail, returning the fbid without publishing.
+    /// This allows you to handle the publish step separately using `publish_video`.
+    pub async fn upload_video(
+        &self,
+        access_token: &str,
+        page_fbid: &str,
+        url: &str,
+        description: &str,
+        thumb: Option<rusoto_core::ByteStream>,
+        check_retry_count: usize,
+        check_video_delay: usize,
+        retry_count: usize,
+        long_client: reqwest::Client,
+        log: impl Fn(LogParams),
+    ) -> Result<String, FbapiError> {
         let fbid = video(
             &self.make_path(&format!("{}/videos", page_fbid)),
             access_token,
@@ -44,6 +78,31 @@ impl Fbapi {
             }
             None => {}
         };
+
+        Ok(fbid)
+    }
+
+    /// Publish a video to newsfeed (and optionally to videos tab first).
+    /// Set `via_videos_tab` to true to publish to videos tab before publishing to newsfeed.
+    /// This allows you to handle errors during publishing while retaining the fbid.
+    pub async fn publish_video(
+        &self,
+        access_token: &str,
+        fbid: &str,
+        via_videos_tab: bool,
+        retry_count: usize,
+        log: impl Fn(LogParams),
+    ) -> Result<serde_json::Value, FbapiError> {
+        if via_videos_tab {
+            post_to_videos_tab(
+                &self.make_path(&fbid),
+                access_token,
+                retry_count,
+                &self.client,
+                &log,
+            )
+            .await?;
+        }
 
         post(
             &self.make_path(&fbid),
@@ -70,54 +129,23 @@ impl Fbapi {
         long_client: reqwest::Client,
         log: impl Fn(LogParams),
     ) -> Result<serde_json::Value, FbapiError> {
-        let fbid = video(
-            &self.make_path(&format!("{}/videos", page_fbid)),
-            access_token,
-            url,
-            description,
-            &long_client,
-            &log,
-        )
-        .await?;
-        check_loop(
-            &self.make_path(&format!(
-                "{}?fields=status&access_token={}",
-                fbid, access_token
-            )),
-            retry_count,
-            check_retry_count,
-            check_video_delay,
-            &self.client,
-            &log,
-        )
-        .await?;
+        let fbid = self
+            .upload_video(
+                access_token,
+                page_fbid,
+                url,
+                description,
+                thumb,
+                check_retry_count,
+                check_video_delay,
+                retry_count,
+                long_client,
+                &log,
+            )
+            .await?;
 
-        // サムネルがあれば、サムネル設定します。
-        match thumb {
-            Some(bytes) => {
-                self.post_video_thumnail(access_token, &fbid, bytes, &log)
-                    .await?;
-            }
-            None => {}
-        };
-
-        post_to_videos_tab(
-            &self.make_path(&fbid),
-            access_token,
-            retry_count,
-            &self.client,
-            &log,
-        )
-        .await?;
-
-        post(
-            &self.make_path(&fbid),
-            access_token,
-            retry_count,
-            &self.client,
-            &log,
-        )
-        .await
+        self.publish_video(access_token, &fbid, true, retry_count, &log)
+            .await
     }
 }
 
