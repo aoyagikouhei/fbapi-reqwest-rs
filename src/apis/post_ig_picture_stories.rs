@@ -12,6 +12,39 @@ impl Fbapi {
         retry_count: usize,
         log: impl Fn(LogParams),
     ) -> Result<serde_json::Value, FbapiError> {
+        let creation_id = self.upload_ig_picture_stories(
+            &access_token,
+            &account_igid,
+            &image_url,
+            check_retry_count,
+            check_delay,
+            retry_count,
+            &log,
+        )
+        .await?;
+
+        self.post_ig_media_publish(
+            &access_token,
+            &account_igid,
+            &creation_id,
+            retry_count,
+            &log,
+        )
+        .await
+    }
+
+    /// Upload a picture stories and poll its status, returning the creation_id without publishing.
+    /// This allows you to handle the publish step separately using `post_ig_media_publish`.
+    pub async fn upload_ig_picture_stories(
+        &self,
+        access_token: &str,
+        account_igid: &str,
+        image_url: &str,
+        check_retry_count: usize,
+        check_delay: usize,
+        retry_count: usize,
+        log: impl Fn(LogParams),
+    ) -> Result<String, FbapiError> {
         let creation_id = post(
             &self.make_path(&format!("{}/media", account_igid)),
             &access_token,
@@ -35,14 +68,7 @@ impl Fbapi {
         )
         .await?;
 
-        self.post_ig_media_publish(
-            &access_token,
-            &account_igid,
-            &creation_id,
-            retry_count,
-            &log,
-        )
-        .await
+        Ok(creation_id)
     }
 }
 
