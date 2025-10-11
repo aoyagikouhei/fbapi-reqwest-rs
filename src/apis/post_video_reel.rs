@@ -13,6 +13,39 @@ impl Fbapi {
         long_client: reqwest::Client,
         log: impl Fn(LogParams),
     ) -> Result<Value, FbapiError> {
+        let video_id = self
+            .upload_video_reel(
+                access_token,
+                page_fbid,
+                file_url,
+                thumb,
+                long_client.clone(),
+                &log,
+            )
+            .await?;
+
+        self.publish_video_reel(
+            access_token,
+            page_fbid,
+            &video_id,
+            description,
+            long_client,
+            &log,
+        )
+        .await
+    }
+
+    /// Upload a video reel and check its status (upload, copyright, thumbnail), returning the video_id without publishing.
+    /// This allows you to handle the publish step separately using `publish_video_reel`.
+    pub async fn upload_video_reel(
+        &self,
+        access_token: &str,
+        page_fbid: &str,
+        file_url: &str,
+        thumb: Option<rusoto_core::ByteStream>,
+        long_client: reqwest::Client,
+        log: impl Fn(LogParams),
+    ) -> Result<String, FbapiError> {
         // １．アップロード用のURLを取得して動画をアップロードする。
         let path = self.make_path(&format!("{}/video_reels", page_fbid));
         let params = vec![("access_token", access_token), ("upload_phase", "start")];
@@ -169,171 +202,188 @@ impl Fbapi {
                 None => {}
             };
 
-            // ６．動画リールを公開する。
-            let finish_path = self.make_path(&format!("{}/video_reels", page_fbid));
-            let finish_params = vec![
-                ("access_token", access_token),
-                ("video_id", video_id),
-                ("upload_phase", "finish"),
-                ("video_state", "PUBLISHED"),
-                ("description", description),
-            ];
-            let log_params = LogParams::new(&finish_path, &finish_params);
-            let finish_res: serde_json::Value = execute_retry(
-                0,
-                || async {
-                    long_client
-                        .post(&finish_path)
-                        .form(&finish_params)
-                        .send()
-                        .await
-                        .map_err(|e| e.into())
-                },
-                &log,
-                log_params,
-            )
-            .await?;
+            Ok(video_id.to_string())
+        } else {
+            Err(FbapiError::UnExpected(res_request))
+        }
+    }
 
-            if finish_res["success"].as_bool() != Some(true) {
-                return Err(FbapiError::UnExpected(finish_res));
-            }
+    /// Publish a video reel using video_id.
+    /// This allows you to handle errors during publishing while retaining the video_id.
+    pub async fn publish_video_reel(
+        &self,
+        access_token: &str,
+        page_fbid: &str,
+        video_id: &str,
+        description: &str,
+        long_client: reqwest::Client,
+        log: impl Fn(LogParams),
+    ) -> Result<Value, FbapiError> {
+        let check_path = self.make_path(&format!(
+            "{}?fields=status&access_token={}",
+            video_id, access_token
+        ));
 
-            // post_id が返却されることを確認する。
-            let post_id = finish_res["post_id"].as_str();
-            match post_id {
-                Some(id) => {
-                    // ７．processing_phase を確認する前に、APIの遅延対策として3秒待機
-                    // Facebook APIの遅延が発生する場合があるため、3秒待機する
-                    sleep_sec(3).await;
+        // ６．動画リールを公開する。
+        let finish_path = self.make_path(&format!("{}/video_reels", page_fbid));
+        let finish_params = vec![
+            ("access_token", access_token),
+            ("video_id", video_id),
+            ("upload_phase", "finish"),
+            ("video_state", "PUBLISHED"),
+            ("description", description),
+        ];
+        let log_params = LogParams::new(&finish_path, &finish_params);
+        let finish_res: serde_json::Value = execute_retry(
+            0,
+            || async {
+                long_client
+                    .post(&finish_path)
+                    .form(&finish_params)
+                    .send()
+                    .await
+                    .map_err(|e| e.into())
+            },
+            &log,
+            log_params,
+        )
+        .await?;
 
-                    let mut retry_count_video_delay = 0;
-                    let mut max_retry_video_delay = 3;
-                    //アップロードフェーズは呼び出されたものの、Fb API が不安定になり、published が実行されず、status にエラーも返されない可能性があります。
-                    //そのため、API のステータス更新を待機する時間は 2 分となります。
-                    let mut timeout_upload_phase_not_started = 0;
-                    let mut max_timeout_upload_phase_not_started = 120;
-                    loop {
-                        let log_params = LogParams::new(&check_path, &vec![]);
-                        let status_res: serde_json::Value = execute_retry(
-                            0,
-                            || async {
-                                self.client
-                                    .get(&check_path)
-                                    .send()
-                                    .await
-                                    .map_err(|e| e.into())
-                            },
-                            &log,
-                            log_params,
-                        )
-                        .await?;
+        if finish_res["success"].as_bool() != Some(true) {
+            return Err(FbapiError::UnExpected(finish_res));
+        }
 
-                        if let Some(error_obj) = status_res.get("error") {
-                            let code = error_obj.get("code").and_then(|v| v.as_u64());
-                            let subcode = error_obj.get("error_subcode").and_then(|v| v.as_u64());
-                            if code == Some(100) && subcode == Some(33) {
-                                if retry_count_video_delay < max_retry_video_delay {
-                                    retry_count_video_delay += 1;
-                                    sleep_sec(3).await;
-                                    continue;
-                                } else {
-                                    return Err(FbapiError::VideoDelayed);
-                                }
-                            }
-                        }
+        // post_id が返却されることを確認する。
+        let post_id = finish_res["post_id"].as_str();
+        match post_id {
+            Some(id) => {
+                // ７．processing_phase を確認する前に、APIの遅延対策として3秒待機
+                // Facebook APIの遅延が発生する場合があるため、3秒待機する
+                sleep_sec(3).await;
 
-                        let processing_status =
-                            status_res["status"]["processing_phase"]["status"].as_str();
-                        let publishing_status =
-                            status_res["status"]["publishing_phase"]["status"].as_str();
+                let mut retry_count_video_delay = 0;
+                let mut max_retry_video_delay = 3;
+                //アップロードフェーズは呼び出されたものの、Fb API が不安定になり、published が実行されず、status にエラーも返されない可能性があります。
+                //そのため、API のステータス更新を待機する時間は 2 分となります。
+                let mut timeout_upload_phase_not_started = 0;
+                let mut max_timeout_upload_phase_not_started = 120;
+                loop {
+                    let log_params = LogParams::new(&check_path, &vec![]);
+                    let status_res: serde_json::Value = execute_retry(
+                        0,
+                        || async {
+                            self.client
+                                .get(&check_path)
+                                .send()
+                                .await
+                                .map_err(|e| e.into())
+                        },
+                        &log,
+                        log_params,
+                    )
+                    .await?;
 
-                        if Some("not_started") == processing_status
-                            && Some("not_started") == publishing_status
-                        {
-                            if timeout_upload_phase_not_started
-                                < max_timeout_upload_phase_not_started
-                            {
-                                sleep_sec(2).await;
-                                timeout_upload_phase_not_started += 2;
+                    if let Some(error_obj) = status_res.get("error") {
+                        let code = error_obj.get("code").and_then(|v| v.as_u64());
+                        let subcode = error_obj.get("error_subcode").and_then(|v| v.as_u64());
+                        if code == Some(100) && subcode == Some(33) {
+                            if retry_count_video_delay < max_retry_video_delay {
+                                retry_count_video_delay += 1;
+                                sleep_sec(3).await;
                                 continue;
                             } else {
-                                return Err(FbapiError::UploadReelNotStarted);
+                                return Err(FbapiError::VideoDelayed);
                             }
                         }
+                    }
 
-                        match processing_status {
-                            Some("complete") => break,
-                            Some("in_progress") | Some("not_started") => {
-                                if status_res["status"]["processing_phase"]["error"].is_object() {
-                                    return Err(FbapiError::UnExpected(json!({
-                                        "error": "processing_phase",
-                                        "status": status_res
-                                    })));
-                                }
-                                sleep_sec(2).await;
-                                continue;
-                            }
-                            Some("error") | Some("failed") => {
+                    let processing_status =
+                        status_res["status"]["processing_phase"]["status"].as_str();
+                    let publishing_status =
+                        status_res["status"]["publishing_phase"]["status"].as_str();
+
+                    if Some("not_started") == processing_status
+                        && Some("not_started") == publishing_status
+                    {
+                        if timeout_upload_phase_not_started < max_timeout_upload_phase_not_started {
+                            sleep_sec(2).await;
+                            timeout_upload_phase_not_started += 2;
+                            continue;
+                        } else {
+                            return Err(FbapiError::UploadReelNotStarted);
+                        }
+                    }
+
+                    match processing_status {
+                        Some("complete") => break,
+                        Some("in_progress") | Some("not_started") => {
+                            if status_res["status"]["processing_phase"]["error"].is_object() {
                                 return Err(FbapiError::UnExpected(json!({
                                     "error": "processing_phase",
                                     "status": status_res
                                 })));
                             }
-                            _ => {
-                                return Err(FbapiError::UnExpected(json!({
-                                    "error": "processing_phase",
-                                    "status": status_res
-                                })));
-                            }
+                            sleep_sec(2).await;
+                            continue;
+                        }
+                        Some("error") | Some("failed") => {
+                            return Err(FbapiError::UnExpected(json!({
+                                "error": "processing_phase",
+                                "status": status_res
+                            })));
+                        }
+                        _ => {
+                            return Err(FbapiError::UnExpected(json!({
+                                "error": "processing_phase",
+                                "status": status_res
+                            })));
                         }
                     }
-
-                    // ８．publishing_phase を確認する。
-                    loop {
-                        let log_params = LogParams::new(&check_path, &vec![]);
-                        let status_res: serde_json::Value = execute_retry(
-                            0,
-                            || async {
-                                self.client
-                                    .get(&check_path)
-                                    .send()
-                                    .await
-                                    .map_err(|e| e.into())
-                            },
-                            &log,
-                            log_params,
-                        )
-                        .await?;
-
-                        let publishing_status =
-                            status_res["status"]["publishing_phase"]["status"].as_str();
-
-                        match publishing_status {
-                            Some("complete") => break,
-                            Some("in_progress") | Some("not_started") => {
-                                sleep_sec(2).await;
-                                continue;
-                            }
-                            Some("error") | Some("failed") => {
-                                return Err(FbapiError::UnExpected(json!({
-                                    "error": "publishing_phase",
-                                    "status": status_res
-                                })));
-                            }
-                            _ => {
-                                return Err(FbapiError::UnExpected(json!({
-                                    "error": "publishing_phase",
-                                    "status": status_res
-                                })));
-                            }
-                        }
-                    }
-                    return Ok(finish_res);
                 }
-                None => return Err(FbapiError::UnExpected(finish_res)),
+
+                // ８．publishing_phase を確認する。
+                loop {
+                    let log_params = LogParams::new(&check_path, &vec![]);
+                    let status_res: serde_json::Value = execute_retry(
+                        0,
+                        || async {
+                            self.client
+                                .get(&check_path)
+                                .send()
+                                .await
+                                .map_err(|e| e.into())
+                        },
+                        &log,
+                        log_params,
+                    )
+                    .await?;
+
+                    let publishing_status =
+                        status_res["status"]["publishing_phase"]["status"].as_str();
+
+                    match publishing_status {
+                        Some("complete") => break,
+                        Some("in_progress") | Some("not_started") => {
+                            sleep_sec(2).await;
+                            continue;
+                        }
+                        Some("error") | Some("failed") => {
+                            return Err(FbapiError::UnExpected(json!({
+                                "error": "publishing_phase",
+                                "status": status_res
+                            })));
+                        }
+                        _ => {
+                            return Err(FbapiError::UnExpected(json!({
+                                "error": "publishing_phase",
+                                "status": status_res
+                            })));
+                        }
+                    }
+                }
+                return Ok(finish_res);
             }
-        } else {
-            return Err(FbapiError::UnExpected(res_request));
+            None => return Err(FbapiError::UnExpected(finish_res)),
         }
     }
 }
