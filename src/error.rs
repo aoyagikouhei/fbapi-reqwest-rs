@@ -33,7 +33,7 @@ pub enum FbapiError {
     #[error("Facebook video delayed, retry recommended")]
     VideoDelayed,
 
-    #[error("Facebook upload reel not started after phase published")] 
+    #[error("Facebook upload reel not started after phase published")]
     UploadReelNotStarted,
 }
 

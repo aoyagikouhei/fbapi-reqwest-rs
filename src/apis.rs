@@ -15,5 +15,5 @@ pub mod post_ig_video_stories;
 pub mod post_object;
 pub mod post_picture;
 pub mod post_video;
-pub mod post_video_thumnail;
 pub mod post_video_reel;
+pub mod post_video_thumnail;

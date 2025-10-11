@@ -12,16 +12,17 @@ impl Fbapi {
         retry_count: usize,
         log: impl Fn(LogParams),
     ) -> Result<serde_json::Value, FbapiError> {
-        let creation_id = self.upload_ig_picture_stories(
-            &access_token,
-            &account_igid,
-            &image_url,
-            check_retry_count,
-            check_delay,
-            retry_count,
-            &log,
-        )
-        .await?;
+        let creation_id = self
+            .upload_ig_picture_stories(
+                &access_token,
+                &account_igid,
+                &image_url,
+                check_retry_count,
+                check_delay,
+                retry_count,
+                &log,
+            )
+            .await?;
 
         self.post_ig_media_publish(
             &access_token,

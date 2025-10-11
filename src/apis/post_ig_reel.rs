@@ -15,19 +15,20 @@ impl Fbapi {
         retry_count: usize,
         log: impl Fn(LogParams),
     ) -> Result<serde_json::Value, FbapiError> {
-        let creation_id = self.upload_ig_reel(
-            &access_token,
-            &account_igid,
-            &video_url,
-            cover_url,
-            &caption,
-            is_share_to_feed,
-            check_retry_count,
-            check_video_delay,
-            retry_count,
-            &log,
-        )
-        .await?;
+        let creation_id = self
+            .upload_ig_reel(
+                &access_token,
+                &account_igid,
+                &video_url,
+                cover_url,
+                &caption,
+                is_share_to_feed,
+                check_retry_count,
+                check_video_delay,
+                retry_count,
+                &log,
+            )
+            .await?;
 
         self.post_ig_media_publish(
             &access_token,
