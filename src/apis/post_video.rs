@@ -147,6 +147,19 @@ impl Fbapi {
         self.publish_video(access_token, &fbid, true, retry_count, &log)
             .await
     }
+
+    /// Publish a video to videos tab first, then to newsfeed.
+    /// This is a convenience wrapper around `publish_video` with `via_videos_tab: true`.
+    pub async fn publish_video_via_videos_tab(
+        &self,
+        access_token: &str,
+        fbid: &str,
+        retry_count: usize,
+        log: impl Fn(LogParams),
+    ) -> Result<serde_json::Value, FbapiError> {
+        self.publish_video(access_token, fbid, true, retry_count, log)
+            .await
+    }
 }
 
 async fn video(
