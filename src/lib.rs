@@ -85,20 +85,36 @@ where
         params.count = count;
         log(params);
         match executor().await {
-            Ok(response) => match response.json::<serde_json::Value>().await {
-                Ok(json) => {
-                    if json["error"].is_object() {
-                        return Err(FbapiError::Facebook(json));
-                    } else {
-                        let mut params = src_params.clone();
-                        params.count = count;
-                        params.result = Some(json.clone());
-                        log(params);
-                        return Ok(json);
+            Ok(response) => {
+                // Extract rate limit headers before consuming response with json()
+                let app_usage = response
+                    .headers()
+                    .get("x-app-usage")
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_owned());
+                let business_use_case_usage = response
+                    .headers()
+                    .get("x-business-use-case-usage")
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_owned());
+
+                match response.json::<serde_json::Value>().await {
+                    Ok(json) => {
+                        if json["error"].is_object() {
+                            return Err(FbapiError::Facebook(json));
+                        } else {
+                            let mut params = src_params.clone();
+                            params.count = count;
+                            params.result = Some(json.clone());
+                            params.app_usage = app_usage;
+                            params.business_use_case_usage = business_use_case_usage;
+                            log(params);
+                            return Ok(json);
+                        }
                     }
+                    Err(err) => last_error = err.into(),
                 }
-                Err(err) => last_error = err.into(),
-            },
+            }
             Err(err) => last_error = err.into(),
         };
         count = count + 1;
@@ -150,6 +166,8 @@ pub struct LogParams {
     pub params: Vec<(String, String)>,
     pub count: usize,
     pub result: Option<serde_json::Value>,
+    pub app_usage: Option<String>,
+    pub business_use_case_usage: Option<String>,
 }
 
 impl LogParams {
@@ -163,8 +181,23 @@ impl LogParams {
             params: dst,
             count: 0,
             result: None,
+            app_usage: None,
+            business_use_case_usage: None,
         }
     }
+}
+
+/// Validates that a media ID is a valid non-zero numeric string.
+///
+/// Returns an error if the ID is empty, "0", or contains non-digit characters.
+pub fn validate_media_id(id: &str, response: &serde_json::Value) -> Result<String, FbapiError> {
+    if id.is_empty() || id == "0" || !id.chars().all(|c| c.is_ascii_digit()) {
+        return Err(FbapiError::InvalidMediaId {
+            id: id.to_owned(),
+            response: response.clone(),
+        });
+    }
+    Ok(id.to_owned())
 }
 
 pub(crate) fn make_part(path: &str, bytes: rusoto_core::ByteStream) -> Result<Part, FbapiError> {
@@ -194,5 +227,57 @@ mod tests {
             })
             .await;
         println!("{:?}", res);
+    }
+
+    #[test]
+    fn test_validate_media_id_valid() {
+        let response = json!({"id": "17841400123456789"});
+        let result = validate_media_id("17841400123456789", &response);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "17841400123456789");
+    }
+
+    #[test]
+    fn test_validate_media_id_zero() {
+        let response = json!({"id": "0"});
+        let result = validate_media_id("0", &response);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            FbapiError::InvalidMediaId { id, .. } => assert_eq!(id, "0"),
+            _ => panic!("Expected InvalidMediaId error"),
+        }
+    }
+
+    #[test]
+    fn test_validate_media_id_empty() {
+        let response = json!({"id": ""});
+        let result = validate_media_id("", &response);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            FbapiError::InvalidMediaId { id, .. } => assert_eq!(id, ""),
+            _ => panic!("Expected InvalidMediaId error"),
+        }
+    }
+
+    #[test]
+    fn test_validate_media_id_non_numeric() {
+        let response = json!({"id": "abc123"});
+        let result = validate_media_id("abc123", &response);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            FbapiError::InvalidMediaId { id, .. } => assert_eq!(id, "abc123"),
+            _ => panic!("Expected InvalidMediaId error"),
+        }
+    }
+
+    #[test]
+    fn test_validate_media_id_negative() {
+        let response = json!({"id": "-123"});
+        let result = validate_media_id("-123", &response);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            FbapiError::InvalidMediaId { id, .. } => assert_eq!(id, "-123"),
+            _ => panic!("Expected InvalidMediaId error"),
+        }
     }
 }

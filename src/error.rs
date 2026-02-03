@@ -35,6 +35,12 @@ pub enum FbapiError {
 
     #[error("Facebook upload reel not started after phase published")]
     UploadReelNotStarted,
+
+    #[error("Invalid media ID: {id} (response: {response})")]
+    InvalidMediaId {
+        id: String,
+        response: serde_json::Value,
+    },
 }
 
 // ユーザに表示するエラー内容
