@@ -190,7 +190,10 @@ impl LogParams {
 /// Validates that a media ID is a valid non-zero numeric string.
 ///
 /// Returns an error if the ID is empty, "0", or contains non-digit characters.
-pub fn validate_media_id(id: &str, response: &serde_json::Value) -> Result<String, FbapiError> {
+pub(crate) fn validate_media_id(
+    id: &str,
+    response: &serde_json::Value,
+) -> Result<String, FbapiError> {
     if id.is_empty() || id == "0" || !id.chars().all(|c| c.is_ascii_digit()) {
         return Err(FbapiError::InvalidMediaId {
             id: id.to_owned(),
