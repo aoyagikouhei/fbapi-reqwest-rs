@@ -1,4 +1,5 @@
 use crate::apis::check_ig_media::check_ig_media_loop;
+use crate::validate_media_id;
 use crate::*;
 
 impl Fbapi {
@@ -109,8 +110,8 @@ async fn post(
     )
     .await?;
     match res["id"].as_str() {
-        Some(s) => Ok(s.to_owned()),
-        None => return Err(FbapiError::UnExpected(res)),
+        Some(s) => validate_media_id(s, &res),
+        None => Err(FbapiError::UnExpected(res)),
     }
 }
 
